@@ -1,7 +1,6 @@
 require 'bundler'
 require 'yaml'
 require 'fileutils'
-require 'set'
 require 'rubygems/installer'
 
 TMPDIR = 'tmp'
@@ -13,15 +12,28 @@ class Repository
     @url = url
   end
 
+  def sync
+    if exists?
+      update
+    else
+      clone
+    end
+  end
+
+  def specs
+    @specs ||= Bundler::LockfileParser.new(File.read(File.join(TMPDIR, @name, 'Gemfile.lock'))).specs
+  end
+  
+  private
   def update
-    Dir.chdir(TMPDIR) do
+    in_local_copy do
       system("git pull")
     end
   end
 
   def clone
-    Dir.chdir(TMPDIR) do
-      system("git clone #{url} --depth 1")
+    in_tmp_dir do
+      system("git clone #{@url} --depth 1 #{@name}")
     end
   end
 
@@ -29,9 +41,19 @@ class Repository
     Dir.exists?(File.join(TMPDIR, @name))
   end
 
-  def specs
-    Dir.chdir(File.join(TMPDIR, @name)) do
-      Bundler::LockfileParser.new(File.read('Gemfile.lock')).specs
+  def in_local_copy(&blk)
+    chdir(@dir, &blk)
+  end
+
+  def in_tmp_dir(&blk)
+    chdir(nil, &blk)
+  end
+
+  def chdir(dir, &blk)
+    if dir
+      Dir.chdir(File.join(TMPDIR, dir, &blk))
+    else
+      Dir.chdir(TMPDIR, &blk)
     end
   end
 end
@@ -43,6 +65,22 @@ class GemStorage
 
   def fetch_all_gems(specs)
     fetch_gems_paralell(downloadable_gems(specs))
+  end
+
+  def build_all_gems(specs)
+    build_in_paralell(downloadable_gems(specs))
+  end
+
+  def cleanup(specs)
+    gemfilenames = (downloadable_gems(specs) - buildable_gems(specs)).map do |spec|
+      File.join(@directory, gemname(spec))
+    end
+
+    FileUtils.rm_f(gemfilenames)
+  end
+
+  def build_index
+    system("gem generate_index --directory s3")
   end
 
   private
@@ -57,22 +95,28 @@ class GemStorage
       "http://rubygems.org/gems/" + gemname(spec)
     end
     
-    system("echo #{gemurls} | xargs -n 1 -P 8 wget -N -q")
+    in_directory do
+      system("echo #{gemurls.join(' ')} | xargs -n 1 -P 8 wget -N -q")
+    end
   end
 
   def build_in_paralell(specs)
-    gemnames = buildable_gems.map do |spec|
+    gemnames = buildable_gems(specs).map do |spec|
       gemname(spec)
     end
 
-    system("echo #{genames) | xargs -n 1 -P 8 bundle exec gem compile")
+    in_directory do
+      system("echo #{gemnames.join(' ')} | xargs -n 1 -P 8 bundle exec gem compile")
+    end
   end
 
   def buildable_gems(specs)
-    specs.select do |spec|
+    downloadable_gems(specs).select do |spec|
       filename = File.join(@directory, gemname(spec))
+      next false unless File.exists?(filename)
+
       hard_spec = Gem::Installer.new(filename).spec
-      spec.find { |f| /(\.c|\.h)$/.match(f) }
+      hard_spec.files.find { |f| /(\.c|\.h)$/.match(f) }
     end
   end
 
@@ -80,15 +124,22 @@ class GemStorage
     "#{spec.name}-#{spec.version}.gem"
   end
 
-  def cleanup(specs)
-    gemfilenames = (specs - buildable_gems(specs)).map do |spec|
-      File.join(@directory, gemname(spec))
-    end
-
-    FileUtils.rm(gemfilename)
-  end
-
-  def build_index
-    system("gem build_index --directory s3")
+  def in_directory(&blk)
+    Dir.chdir(@directory, &blk)
   end
 end
+
+config = YAML.load_file('config.yml')['repos']
+repos = config.collect do |name, url|
+  Repository.new(name, url)
+end
+#repos.each(&:sync)
+
+storage = GemStorage.new('s3/gems')
+repos.each do |repo|
+  storage.fetch_all_gems(repo.specs)
+  storage.build_all_gems(repo.specs)
+  storage.cleanup(repo.specs)
+end
+storage.build_index
+
