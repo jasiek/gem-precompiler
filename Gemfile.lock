@@ -1,0 +1,10 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    gem-compiler (0.2.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  gem-compiler
