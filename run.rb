@@ -133,7 +133,7 @@ config = YAML.load_file('config.yml')['repos']
 repos = config.collect do |name, url|
   Repository.new(name, url)
 end
-#repos.each(&:sync)
+repos.each(&:sync)
 
 storage = GemStorage.new('s3/gems')
 repos.each do |repo|

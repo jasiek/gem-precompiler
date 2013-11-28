@@ -1,10 +1,12 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    builder (3.2.2)
     gem-compiler (0.2.0)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
+  builder
   gem-compiler
