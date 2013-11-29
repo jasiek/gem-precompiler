@@ -26,7 +26,7 @@ task :build => [TMP_DIR, S3_DIR] do
 end
 
 task :upload do
-  run "s3_website push --site s3"
+  sh "s3_website push --site s3"
 end
 
 task :default => [:build, :upload]
