@@ -1,20 +1,19 @@
-# Gem::Precompiler
+# GemPrecompiler
 
-TODO: Write a gem description
+When deploying to a large number of identical servers, it makes sense to provide each installation with a precompiled versions of gems that have native components.
+Those can be either bundled with the application, or distributed to a `rubygems.org`-like repository, from which they can be pulled in and installed. This particular
+tool uses Amazon S3 to distribute the compiled gems for each architecture. All you need to do is add a `source` clause in your `Gemfile`.
+
+## Prerequisites
+
+* Ruby 1.9
+* git
+* wget
+* a working compiler
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
-    gem 'gem-precompiler'
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install gem-precompiler
+Clone this repository, and run `bundle install`. 
 
 ## Usage
 
