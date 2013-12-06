@@ -28,6 +28,8 @@ module GemPrecompiler
     def downloadable_gems(specs)
       specs.reject do |spec|
         spec.source.is_a? Bundler::Source::Git 
+      end.uniq do |spec|
+        gemname(spec)
       end
     end
 
